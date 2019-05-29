@@ -6,14 +6,39 @@ public class PlatformController : RaycastController
 {
     // new layer mask because colliderMask is for stopping object
     public LayerMask passengerMask;
-    // to move platform around
-    public Vector3 move;
+    // to move platform around. Not needed if platform has set movement among waypoints
+    // public Vector3 move;
+
+    // positions relative to platform for platform to move between
+    public Vector3[] localWaypoints;
+    // positions use to actually travel between. 
+    public Vector3[] globalWaypoints;
+
+    // speed of platform
+    public float speed;
+
+    // specify whether want to be cyclic platform (after reach last waypoint, move to first)
+    public bool cyclic;
+
+    // wait time for platform to wait when it hits a waypoint
+    public float waitTime;
+
+    // set east amount. Should be 1 when no easing. Ease() adds 1 to this value
+    [Range (0, 3)]
+    public float easeAmount;
+
+    // index of waypoint platform is moving away from
+    private int fromWaypointIndex;
+    // percentage of distance covered between waypoints. Value between 0 and 1
+    private float percentBetweenWaypoints;
+    // when to next move
+    private float nextMoveTime;
 
     // list of passenger information
-    List<PassengerMovement> passengerMovement;
+    private List<PassengerMovement> passengerMovement;
     // map passenger transform to its controller 2d
     // for reducing number of GetComponent calls
-    Dictionary<Transform, Controller2D> passengerDictionary = new Dictionary<Transform, Controller2D>();
+    private Dictionary<Transform, Controller2D> passengerDictionary = new Dictionary<Transform, Controller2D>();
 
     // holds passenger information
     // holds tranform, velocity
@@ -39,6 +64,16 @@ public class PlatformController : RaycastController
     protected override void Start()
     {
         base.Start();
+
+        // intialize global waypoints
+        globalWaypoints = new Vector3[localWaypoints.Length];
+
+        // loop through local waypoints and use values to assign to global waypoints elements
+        for (int i = 0; i < localWaypoints.Length; ++i)
+        {
+            // global waypoints equal to local waypoints plus the position of object when loaded into scene
+            globalWaypoints[i] = localWaypoints[i] + transform.position;
+        }
     }
 
     // Update is called once per frame
@@ -47,7 +82,9 @@ public class PlatformController : RaycastController
         UpdateRaycastOrigins();
         // how much to move object
         // can change x, y, z values
-        Vector3 velocity = move * Time.deltaTime;
+        //Vector3 velocity = move * Time.deltaTime;
+        // use CalculatePlatformMovement for velocity
+        Vector3 velocity = CalculatePlatformMovement();
 
         // move the passengers based on velocity of platform
         CalculatePassengerMovement(velocity);
@@ -190,5 +227,95 @@ public class PlatformController : RaycastController
                 }
             }
         }
+    }
+
+    // for viewing waypoints while editing level
+    void OnDrawGizmos()
+    {
+        if (localWaypoints != null)
+        {
+            // make gizmos red
+            Gizmos.color = Color.red;
+            // for setting gizmo size
+            float size = .3f;
+
+            // go through each waypoint
+            for (int i = 0; i < localWaypoints.Length; ++i)
+            {
+                // need to convert local position into a global position to draw gizmos
+                // want gizmos to stay still when game is running but move with platform when game isn't running (e.g. use global waypoints if running, otherwise use local). 
+                Vector3 globalWaypointPosition = (Application.isPlaying) ? globalWaypoints[i] : localWaypoints[i] + transform.position;
+                // draw gizmo centered at global position. Going to draw cross
+                Gizmos.DrawLine(globalWaypointPosition - Vector3.up * size, globalWaypointPosition + Vector3.up * size);
+                Gizmos.DrawLine(globalWaypointPosition - Vector3.left * size, globalWaypointPosition + Vector3.left * size);
+
+            }
+        }
+    }
+
+    // equation to get easing when moving between two points
+    // y = (x^a) / (x^a + (1-x)^a). The higher the value of a, the more easing when reaching points. When a = 1, movement is linear and thus like not easing.
+    // value between 1 and around 3 is optimal. 
+    private float Ease(float x)
+    {
+        float a = easeAmount + 1;
+        return Mathf.Pow(x, a) / (Mathf.Pow(x, a) + Mathf.Pow(1 - x, a));
+    }
+
+    private Vector3 CalculatePlatformMovement()
+    {
+        // want to know which waypoint platform is moving away from, towards, and % it has moved between the two
+
+        // if time is less than nextMoveTime, do not move at all (return Vector3.zero)
+        if (Time.time < nextMoveTime)
+        {
+            return Vector3.zero;
+        }
+
+        fromWaypointIndex %= globalWaypoints.Length;
+
+        // toWayPoint must be 1 from fromWaypoint index
+        int toWaypointIndex = (fromWaypointIndex + 1) % globalWaypoints.Length;
+
+        // Vector3 Distance() method used to get distance between two vector3 points
+        float distanceBetweenWaypoints = Vector3.Distance(globalWaypoints[fromWaypointIndex], globalWaypoints[toWaypointIndex]);
+        // Time.deltaTime * speed increases at a constant rate. So if waypoints are further apart, the percentage between them will still increase at same speed
+        // use distance and divide speed by distance to account for this
+        percentBetweenWaypoints += Time.deltaTime * speed/distanceBetweenWaypoints;
+        // clamp percent between 0 and 1
+        Mathf.Clamp01(percentBetweenWaypoints);
+        float easedPercentBetweenWaypoint = Ease(percentBetweenWaypoints);
+
+        // vector3 stores new position. Use Vector3.Lerp to find point between fromWaypoint and toWaypoint based on eased percentage between waypoints
+        Vector3 newPos = Vector3.Lerp(globalWaypoints[fromWaypointIndex], globalWaypoints[toWaypointIndex], easedPercentBetweenWaypoint);
+
+        // what if percent between waypoints is >= 1. Reached waypoint
+        if (percentBetweenWaypoints >= 1)
+        {
+            // set it to 0
+            percentBetweenWaypoints = 0;
+            // increment fromWayPoint
+            fromWaypointIndex++;
+
+            if (!cyclic)
+            {
+                // if fromWayPointIndex now is outside bounds of array, set it to 0, and reverse the waypoints array
+                if (fromWaypointIndex >= globalWaypoints.Length - 1)
+                {
+                    fromWaypointIndex = 0;
+                    // reverse globalWaypoints array to go in opposite direction.
+                    System.Array.Reverse(globalWaypoints);
+                }
+            }
+
+            // next move time is equal to current time plus amount to wait
+            nextMoveTime = Time.time + waitTime;
+        }
+
+        
+
+
+        // return newPos - transform.position to get amount we want to move this frame
+        return newPos - transform.position;
     }
 }
