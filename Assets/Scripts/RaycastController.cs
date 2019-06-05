@@ -2,6 +2,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+// Annotation useful when referencing a component
+// Automatically adds required components and prevents them from
+// being deleted in Unity editor
 [RequireComponent (typeof(BoxCollider2D))]
 public class RaycastController : MonoBehaviour
 {

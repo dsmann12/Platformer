@@ -2,10 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// Annotation useful when referencing a component
-// Automatically adds required components and prevents them from
-// being deleted in Unity editor
-[RequireComponent(typeof(BoxCollider2D))]
+
 public class Controller2D : RaycastController
 {
     public CollisionInfo collisions;
@@ -23,6 +20,9 @@ public class Controller2D : RaycastController
         public float slopeAngle, slopeAngleOld;
         public Vector3 velocityOld;
 
+        // 1 means facing right, -1 means facing left. For wall jumping
+        public int faceDirection;
+
         public void Reset()
         {
             above = below = false;
@@ -37,6 +37,9 @@ public class Controller2D : RaycastController
     protected override void Start()
     {
         base.Start();
+
+        // initialize to facing right
+        collisions.faceDirection = 1;
     }
 
     // Update is called once per frame
@@ -52,16 +55,27 @@ public class Controller2D : RaycastController
         // set old velocity
         collisions.velocityOld = velocity;
 
+        // if character has horizontal velocity, set face direction to sign of that velocity
+        if (velocity.x != 0)
+        {
+            collisions.faceDirection = (int) Mathf.Sign(velocity.x);
+        }
+
         // only check descent if y is decreasing
         if (velocity.y < 0)
         {
             DescendSlope(ref velocity);
         }
 
-        if (velocity.x != 0)
-        {
-            HorizontalCollisions(ref velocity);
-        }
+
+
+        //if (velocity.x != 0)
+        //{
+        //    HorizontalCollisions(ref velocity);
+        //}
+
+        // check for horizontal collisions even if x = 0, for wall jump
+        HorizontalCollisions(ref velocity);
 
         if (velocity.y != 0)
         {
@@ -79,9 +93,17 @@ public class Controller2D : RaycastController
     public void HorizontalCollisions(ref Vector3 velocity)
     {
         // if moving down, direction is -1, else 1
-        float directionX = Mathf.Sign(velocity.x);
+        //float directionX = Mathf.Sign(velocity.x);
+        float directionX = collisions.faceDirection;
         // raylength is equal to abs value of velocity (forces positive) and offset by skinWidth
         float rayLength = Mathf.Abs(velocity.x) + skinWidth;
+
+        // use two skinwidths. First to move ray to edge of collider, second to add some distance to detect a wall
+        if (Mathf.Abs(velocity.x) < skinWidth)
+        {
+            rayLength = 2 * skinWidth;
+        }
+
         for (uint i = 0; i < horizontalRayCount; ++i)
         {
             // if moving left, want rays to start at bottomLeft, else from bottomRight
@@ -119,7 +141,7 @@ public class Controller2D : RaycastController
                 // bottom most ray
                 if (i == 0 && slopeAngle <= maxClimbAngle)
                 {
-                    // if we are desciding slope
+                    // if we are descending slope
                     // actually not descending, we are climbing. 
                     if (collisions.descendingSlope)
                     {
