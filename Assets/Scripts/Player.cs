@@ -14,11 +14,21 @@ public class Player : MonoBehaviour
     // these determine what gravity and jumpVelocity are?
     // jump height is how many units character to jump
     // time is how long it takes to reach that point
-    public float jumpHeight = 4;
+    // public float jumpHeight = 4;
+    public float maxJumpHeight = 4;
+    public float minJumpHeight = 1;
+
     public float timeToJumpApex = .4f;
     public float accelerationTimeAirborne = .2f;
     public float accelerationTimeGrounded = .1f;
     public float wallSlideSpeedMax = 3;
+
+    // introduce minimum jump height for variable jump height
+    // will need to calculate jump force required to meet min jump height
+    // if release jump button early, character's upward velocity will be set to minimum jump force
+    // so wherever character currently is in jump, it will only travel min jump height further upwards
+    // velocityFinal^2 = velocityInit ^ 2 + 2 * acceleration * displacement
+    // minJumpForce = sqrt(2 * gravity * minJumpHeight)
 
     // store forces for each type of wall jump
     // climb up same wall, jump off wall, and leap off wall
@@ -33,7 +43,8 @@ public class Player : MonoBehaviour
 
     private float gravity;
     private Vector3 velocity;
-    private float jumpVelocity;
+    private float maxJumpVelocity;
+    private float minJumpVelocity;
     private float velocityXSmoothing;
     private Controller2D controller;
     private float timeToWallUnstick;
@@ -51,14 +62,15 @@ public class Player : MonoBehaviour
         // use recipricol
         // gravity / 2*jumpHeight = 1/timeToJumpApex^2
         // gravity = 2*jumpHeight / timeToApex^2
-        gravity = -(2 * jumpHeight) / Mathf.Pow(timeToJumpApex, 2);
+        gravity = -(2 * maxJumpHeight) / Mathf.Pow(timeToJumpApex, 2);
         // Know final velocity equal to initial vecloity + acceleration * time
         // think of apex. Initial velocity us 0. Acceleration is gravity
         // velocityFinal = velocityInitial + acceleration * time
         // jumpVelocity = gravity * timeToJumpApex
         // make sure use positive version of gravity
-        jumpVelocity = Mathf.Abs(gravity) * timeToJumpApex;
-        print("Gravity: " + gravity + " Jump Velocity: " + jumpVelocity);
+        maxJumpVelocity = Mathf.Abs(gravity) * timeToJumpApex;
+        minJumpVelocity = Mathf.Sqrt(2 * Mathf.Abs(gravity) * minJumpHeight);
+        print("Gravity: " + gravity + " Jump Velocity: " + maxJumpVelocity);
     }
 
     // Update is called once per frame
@@ -114,10 +126,10 @@ public class Player : MonoBehaviour
             }
         }
 
-        if (controller.collisions.above || controller.collisions.below)
-        {
-            velocity.y = 0;
-        }
+        //if (controller.collisions.above || controller.collisions.below)
+        //{
+        //    velocity.y = 0;
+        //}
 
         //Vector2 input = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
 
@@ -150,10 +162,18 @@ public class Player : MonoBehaviour
             // do regular jump if touching ground
             if (controller.collisions.below)
             {
-                velocity.y = jumpVelocity;
+                velocity.y = maxJumpVelocity;
             }
+        }
 
-            
+        // if space button released
+        if (Input.GetKeyUp(KeyCode.Space))
+        {
+            // could be case that jumpVelocity is less than minJumpVelocity
+            if (velocity.y > minJumpVelocity)
+            {
+                velocity.y = minJumpVelocity;
+            }
         }
 
 
@@ -168,7 +188,14 @@ public class Player : MonoBehaviour
         velocity.y += gravity * Time.deltaTime;
 
         // invoke controller's move method to move object
-        controller.Move(velocity * Time.deltaTime);
+        controller.Move(velocity * Time.deltaTime, input);
+
+        // if on moving platform, it is potentially calling controller.Move which may be altering above and below values
+        // want to make sure have values present after calling Move with own input
+        if (controller.collisions.above || controller.collisions.below)
+        {
+            velocity.y = 0;
+        }
     }
 
     

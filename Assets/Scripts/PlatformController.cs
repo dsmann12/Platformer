@@ -140,7 +140,8 @@ public class PlatformController : RaycastController
                 rayOrigin += Vector2.right * (verticalRaySpacing * i);
                 RaycastHit2D hit = Physics2D.Raycast(rayOrigin, Vector2.up * directionY, rayLength, passengerMask);
 
-                if (hit)
+                // don't want to move player if player is inside collision box of platform. Can happen on one sided platforms
+                if (hit && hit.distance != 0)
                 {
                     // only move passenger is passenger has not been added to hashset
                     if (!movedPassengers.Contains(hit.transform))
@@ -175,7 +176,8 @@ public class PlatformController : RaycastController
                 rayOrigin += Vector2.up * (horizontalRaySpacing * i);
                 RaycastHit2D hit = Physics2D.Raycast(rayOrigin, Vector2.right * directionX, rayLength, passengerMask);
 
-                if (hit)
+                // don't want to move player if player is inside collision box of platform. Can happen on one sided platforms
+                if (hit && hit.distance != 0)
                 {
                     if (!movedPassengers.Contains(hit.transform))
                     {
@@ -210,7 +212,8 @@ public class PlatformController : RaycastController
                 // want ray to point up always
                 RaycastHit2D hit = Physics2D.Raycast(rayOrigin, Vector2.up, rayLength, passengerMask);
 
-                if (hit)
+                // don't want to move player if player is inside collision box of platform. Can happen on one sided platforms
+                if (hit && hit.distance != 0)
                 {
                     if (!movedPassengers.Contains(hit.transform))
                     {
@@ -283,7 +286,7 @@ public class PlatformController : RaycastController
         // use distance and divide speed by distance to account for this
         percentBetweenWaypoints += Time.deltaTime * speed/distanceBetweenWaypoints;
         // clamp percent between 0 and 1
-        Mathf.Clamp01(percentBetweenWaypoints);
+        percentBetweenWaypoints = Mathf.Clamp01(percentBetweenWaypoints);
         float easedPercentBetweenWaypoint = Ease(percentBetweenWaypoints);
 
         // vector3 stores new position. Use Vector3.Lerp to find point between fromWaypoint and toWaypoint based on eased percentage between waypoints
@@ -311,9 +314,6 @@ public class PlatformController : RaycastController
             // next move time is equal to current time plus amount to wait
             nextMoveTime = Time.time + waitTime;
         }
-
-        
-
 
         // return newPos - transform.position to get amount we want to move this frame
         return newPos - transform.position;

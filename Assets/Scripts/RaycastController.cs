@@ -14,7 +14,7 @@ public class RaycastController : MonoBehaviour
     public LayerMask collisionMask;
 
     // used so rays can be cast even when on the ground or colliding with object
-    public const float skinWidth = .015f;
+    public const float skinWidth = .035f;
     public int horizontalRayCount = 4;
     public int verticalRayCount = 4;
 
@@ -22,7 +22,7 @@ public class RaycastController : MonoBehaviour
     protected float horizontalRaySpacing;
     protected float verticalRaySpacing;
 
-    protected BoxCollider2D collider;
+    public BoxCollider2D collider;
 
     protected RaycastOrigins raycastOrigins;
 
@@ -32,11 +32,16 @@ public class RaycastController : MonoBehaviour
         public Vector2 topLeft, topRight, bottomLeft, bottomRight;
     }
 
+    // must be run before Start so that camera can get collider bounds in its Start
+    // method
+    protected virtual void Awake()
+    {
+        collider = GetComponent<BoxCollider2D>();
+    }
+
     // Start is called before the first frame update
     protected virtual void Start()
     {
-        collider = GetComponent<BoxCollider2D>();
-
         CalculateRaySpacing();
     }
 

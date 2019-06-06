@@ -10,6 +10,8 @@ public class Controller2D : RaycastController
     public float maxClimbAngle = 80;
     public float maxDescendAngle = 80;
 
+    public Vector2 playerInput;
+
     // struct for information about collisions. Where collisions are occurring
     public struct CollisionInfo
     {
@@ -22,6 +24,10 @@ public class Controller2D : RaycastController
 
         // 1 means facing right, -1 means facing left. For wall jumping
         public int faceDirection;
+
+        // indicates if player if falling through platform
+        // used to moving platform doesn't catch player if not falling through fast enough
+        public bool fallingThroughPlatform;
 
         public void Reset()
         {
@@ -47,13 +53,20 @@ public class Controller2D : RaycastController
     {
     }
 
-    // standing on platform bool useful for allowing jump on vertically moving platforms
+    // for moving platforms
     public void Move(Vector3 velocity, bool standingOnPlatform = false)
+    {
+        Move(velocity, Vector2.zero, standingOnPlatform);
+    }
+
+    // standing on platform bool useful for allowing jump on vertically moving platforms
+    public void Move(Vector3 velocity, Vector2 input, bool standingOnPlatform = false)
     {
         UpdateRaycastOrigins();
         collisions.Reset();
         // set old velocity
         collisions.velocityOld = velocity;
+        playerInput = input;
 
         // if character has horizontal velocity, set face direction to sign of that velocity
         if (velocity.x != 0)
@@ -227,6 +240,30 @@ public class Controller2D : RaycastController
             // where ray hit an obstacle (ray distance)
             if (hit)
             {
+                // for moving through one sided platform
+                if (hit.collider.tag == "OneSidedPlatform")
+                {
+                    // check if hit.distance is 0 in case player gets close to edge of platform but doesn't quite make it. 
+                    // without this the player will float up through the platform
+                    if (directionY == 1 || hit.distance == 0)
+                    {
+                        continue;
+                    }
+
+                    if (collisions.fallingThroughPlatform)
+                    {
+                        continue;
+                    }
+
+                    // if player is pressing down, fall through platform
+                    if (playerInput.y == -1)
+                    {
+                        collisions.fallingThroughPlatform = true;
+                        // reset falling through plaftorm flag after half a second
+                        Invoke("ResetFallingThroughPlatform", 1.0f);
+                        continue;
+                    }
+                }
 
                 velocity.y = (hit.distance - skinWidth) * directionY;
 
@@ -353,6 +390,12 @@ public class Controller2D : RaycastController
                 }
             }
         }
+    }
+
+    // used to reset falling through platform flag after some time
+    public void ResetFallingThroughPlatform()
+    {
+        collisions.fallingThroughPlatform = false;
     }
         
 }
