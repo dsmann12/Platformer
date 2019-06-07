@@ -49,6 +49,12 @@ public class Player : MonoBehaviour
     private Controller2D controller;
     private float timeToWallUnstick;
 
+    private Vector2 directionalInput;
+    // boolean to hold whether player is wall sliding
+    // wall sliding is true if player is colliding with wall to left or right, is not touching ground, and is moving downwards
+    private bool wallSliding = false;
+    private int wallDirX;
+
     // Start is called before the first frame update    
     void Start()
     {
@@ -76,23 +82,197 @@ public class Player : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        Vector2 input = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
+        //Vector2 directionalInput = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
 
         // equals -1 if colliding with wall to left, and 1 if colliding with wall to right
-        int wallDirX = (controller.collisions.left) ? -1 : 1;
+        wallDirX = (controller.collisions.left) ? -1 : 1;
 
+        //// this is moved to before velocity may be reset
+        //float targetVelocityX = directionalInput.x * moveSpeed;
+
+        //// Apply input to move in horizontal direction
+        //// makes change of direction less abrupt, smooths it.
+        //// if grounded use acceleration for grounded, otherwise use the one for airborn
+        //velocity.x = Mathf.SmoothDamp(velocity.x, targetVelocityX, ref velocityXSmoothing,
+        //    (controller.collisions.below ? accelerationTimeGrounded : accelerationTimeAirborne));
+        //// apply gravity to velocity
+        //velocity.y += gravity * Time.deltaTime;
+
+        CalculateVelocity();
+        HandleWallSliding();
+
+        //// equals -1 if colliding with wall to left, and 1 if colliding with wall to right
+        //wallDirX = (controller.collisions.left) ? -1 : 1;
+
+        //// boolean to hold whether player is wall sliding
+        //// wall sliding is true if player is colliding with wall to left or right, is not touching ground, and is moving downwards
+        //wallSliding = false;
+
+        //if ((controller.collisions.left || controller.collisions.right) && !controller.collisions.below && velocity.y < 0)
+        //{
+        //    wallSliding = true;
+
+        //    // constrain downward speeds to some wall slide speed limit
+        //    if (velocity.y < -wallSlideSpeedMax)
+        //    {
+        //        velocity.y = -wallSlideSpeedMax;
+        //    }
+
+        //    // if time to wall unstick more than 0, want to start decreasing time to unstick by Time.DeltaTime
+        //    // only want to do this if we are moving away from wall we are sliding down
+        //    if (timeToWallUnstick > 0)
+        //    {
+        //        // reset if still can be stuck to wall. Do not want to move
+        //        velocityXSmoothing = 0;
+        //        velocity.x = 0;
+
+        //        if (directionalInput.x != wallDirX && directionalInput.x != 0)
+        //        {
+        //            timeToWallUnstick -= Time.deltaTime;
+        //        } else
+        //        {
+        //            timeToWallUnstick = wallStickTime;
+        //        }
+        //    } else
+        //    {
+        //        // timeToWallUnstick starts at 0, so do this in case
+        //        timeToWallUnstick = wallStickTime;
+        //    }
+        //}
+
+        //if (controller.collisions.above || controller.collisions.below)
+        //{
+        //    velocity.y = 0;
+        //}
+
+        //Vector2 input = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
+
+        // no longer care if collisions below since can jump if on wall
+        //if (Input.GetKeyDown(KeyCode.Space) && controller.collisions.below)
+        //if (Input.GetKeyDown(KeyCode.Space))
+        //{
+            
+        //}
+
+        //// if space button released
+        //if (Input.GetKeyUp(KeyCode.Space))
+        //{
+           
+        //}
+
+
+        //float targetVelocityX = input.x * moveSpeed;
+
+        //// Apply input to move in horizontal direction
+        //// makes change of direction less abrupt, smooths it.
+        //// if grounded use acceleration for grounded, otherwise use the one for airborn
+        //velocity.x = Mathf.SmoothDamp(velocity.x, targetVelocityX, ref velocityXSmoothing,
+        //    (controller.collisions.below ? accelerationTimeGrounded : accelerationTimeAirborne));
+        // apply gravity to velocity
+        //velocity.y += gravity * Time.deltaTime;
+
+        // invoke controller's move method to move object
+        controller.Move(velocity * Time.deltaTime, directionalInput);
+
+        // if on moving platform, it is potentially calling controller.Move which may be altering above and below values
+        // want to make sure have values present after calling Move with own input
+        if (controller.collisions.above || controller.collisions.below)
+        {
+            // stops velocity from being reset to 0 when sliding down a slope
+            // offset y to normal * gravity for each frame
+            if (controller.collisions.slidingDownMaxSlope)
+            {
+                velocity.y += controller.collisions.slopeNormal.y * -gravity * Time.deltaTime;
+            } else
+            {
+                velocity.y = 0;
+            }
+        }
+                
+    }
+
+    public void SetDirectionalInput (Vector2 input)
+    {
+        directionalInput = input;
+    }
+
+    public void OnJumpInputDown()
+    {
+        // if wall sliding, 
+        if (wallSliding)
+        {
+            // if trying to move in same direction as wall we are facing
+            if (wallDirX == directionalInput.x)
+            {
+                // want to jump away from wall and up
+                velocity.x = -wallDirX * wallJumpClimb.x;
+                velocity.y = wallJumpClimb.y;
+                // for jumping off the wall
+            }
+            else if (directionalInput.x == 0)
+            {
+                velocity.x = -wallDirX * wallJumpOff.x;
+                velocity.y = wallJumpOff.y;
+                // when have input opposite to wall direction, do wall leap
+            }
+            else
+            {
+                velocity.x = -wallDirX * wallLeap.x;
+                velocity.y = wallLeap.y;
+            }
+        }
+
+        // do regular jump if touching ground
+        if (controller.collisions.below)
+        {
+            if (controller.collisions.slidingDownMaxSlope)
+            {
+                // compare direction of x input to direction of slope normal
+                // no jumping against max slope
+                if (directionalInput.x != -Mathf.Sign(controller.collisions.slopeNormal.x))
+                {
+                    velocity.y = maxJumpVelocity * controller.collisions.slopeNormal.y;
+                    velocity.x = maxJumpVelocity * controller.collisions.slopeNormal.x;
+
+                }
+            } else
+            {
+                velocity.y = maxJumpVelocity;
+            }
+        }
+    }
+
+    public void OnJumpInputUp()
+    {
+        // could be case that jumpVelocity is less than minJumpVelocity
+        if (velocity.y > minJumpVelocity)
+        {
+            velocity.y = minJumpVelocity;
+        }
+    }
+
+    private void CalculateVelocity()
+    {
         // this is moved to before velocity may be reset
-        float targetVelocityX = input.x * moveSpeed;
+        float targetVelocityX = directionalInput.x * moveSpeed;
 
         // Apply input to move in horizontal direction
         // makes change of direction less abrupt, smooths it.
         // if grounded use acceleration for grounded, otherwise use the one for airborn
         velocity.x = Mathf.SmoothDamp(velocity.x, targetVelocityX, ref velocityXSmoothing,
             (controller.collisions.below ? accelerationTimeGrounded : accelerationTimeAirborne));
+        // apply gravity to velocity
+        velocity.y += gravity * Time.deltaTime;
+    }
+
+    private void HandleWallSliding()
+    {
+        // equals -1 if colliding with wall to left, and 1 if colliding with wall to right
+        wallDirX = (controller.collisions.left) ? -1 : 1;
 
         // boolean to hold whether player is wall sliding
         // wall sliding is true if player is colliding with wall to left or right, is not touching ground, and is moving downwards
-        bool wallSliding = false;
+        wallSliding = false;
 
         if ((controller.collisions.left || controller.collisions.right) && !controller.collisions.below && velocity.y < 0)
         {
@@ -112,91 +292,20 @@ public class Player : MonoBehaviour
                 velocityXSmoothing = 0;
                 velocity.x = 0;
 
-                if (input.x != wallDirX && input.x != 0)
+                if (directionalInput.x != wallDirX && directionalInput.x != 0)
                 {
                     timeToWallUnstick -= Time.deltaTime;
-                } else
+                }
+                else
                 {
                     timeToWallUnstick = wallStickTime;
                 }
-            } else
+            }
+            else
             {
                 // timeToWallUnstick starts at 0, so do this in case
                 timeToWallUnstick = wallStickTime;
             }
         }
-
-        //if (controller.collisions.above || controller.collisions.below)
-        //{
-        //    velocity.y = 0;
-        //}
-
-        //Vector2 input = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
-
-        // no longer care if collisions below since can jump if on wall
-        //if (Input.GetKeyDown(KeyCode.Space) && controller.collisions.below)
-        if (Input.GetKeyDown(KeyCode.Space))
-        {
-            // if wall sliding, 
-            if (wallSliding)
-            {
-                // if trying to move in same direction as wall we are facing
-                if (wallDirX == input.x)
-                {
-                    // want to jump away from wall and up
-                    velocity.x = -wallDirX * wallJumpClimb.x;
-                    velocity.y = wallJumpClimb.y;
-                // for jumping off the wall
-                } else if (input.x == 0)
-                {
-                    velocity.x = -wallDirX * wallJumpOff.x;
-                    velocity.y = wallJumpOff.y;
-                // when have input opposite to wall direction, do wall leap
-                } else
-                {
-                    velocity.x = -wallDirX * wallLeap.x;
-                    velocity.y = wallLeap.y;
-                }
-            }
-
-            // do regular jump if touching ground
-            if (controller.collisions.below)
-            {
-                velocity.y = maxJumpVelocity;
-            }
-        }
-
-        // if space button released
-        if (Input.GetKeyUp(KeyCode.Space))
-        {
-            // could be case that jumpVelocity is less than minJumpVelocity
-            if (velocity.y > minJumpVelocity)
-            {
-                velocity.y = minJumpVelocity;
-            }
-        }
-
-
-        //float targetVelocityX = input.x * moveSpeed;
-
-        //// Apply input to move in horizontal direction
-        //// makes change of direction less abrupt, smooths it.
-        //// if grounded use acceleration for grounded, otherwise use the one for airborn
-        //velocity.x = Mathf.SmoothDamp(velocity.x, targetVelocityX, ref velocityXSmoothing,
-        //    (controller.collisions.below ? accelerationTimeGrounded : accelerationTimeAirborne));
-        // apply gravity to velocity
-        velocity.y += gravity * Time.deltaTime;
-
-        // invoke controller's move method to move object
-        controller.Move(velocity * Time.deltaTime, input);
-
-        // if on moving platform, it is potentially calling controller.Move which may be altering above and below values
-        // want to make sure have values present after calling Move with own input
-        if (controller.collisions.above || controller.collisions.below)
-        {
-            velocity.y = 0;
-        }
     }
-
-    
 }

@@ -18,6 +18,8 @@ public class RaycastController : MonoBehaviour
     public int horizontalRayCount = 4;
     public int verticalRayCount = 4;
 
+    public const float distanceBetweenRays = .25f;
+
     // holds ray spacing for number of rays
     protected float horizontalRaySpacing;
     protected float verticalRaySpacing;
@@ -68,10 +70,17 @@ public class RaycastController : MonoBehaviour
         Bounds bounds = collider.bounds;
         bounds.Expand(skinWidth * -2); // shrinks bounds by skinWidth
 
+        float boundsWidth = bounds.size.x;
+        float boundsHeight = bounds.size.y;
+
         // must be at least one ray in each corner
         // at least two vertical and two horizontal
-        horizontalRayCount = Mathf.Clamp(horizontalRayCount, 2, int.MaxValue);
-        verticalRayCount = Mathf.Clamp(verticalRayCount, 2, int.MaxValue);
+        // calculate based on width and height of object instead
+        //horizontalRayCount = Mathf.Clamp(horizontalRayCount, 2, int.MaxValue);
+        horizontalRayCount = Mathf.RoundToInt(boundsHeight / distanceBetweenRays);
+
+        //verticalRayCount = Mathf.Clamp(verticalRayCount, 2, int.MaxValue);
+        verticalRayCount = Mathf.RoundToInt(boundsWidth / distanceBetweenRays);
 
         // calculate ray spacing
         // e.g. if 2 rays, then size/1 so space is essentially spacing out by whole width
