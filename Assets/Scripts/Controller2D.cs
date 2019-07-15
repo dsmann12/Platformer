@@ -276,7 +276,7 @@ public class Controller2D : RaycastController
                     {
                         collisions.fallingThroughPlatform = true;
                         // reset falling through plaftorm flag after half a second
-                        Invoke("ResetFallingThroughPlatform", 1.0f);
+                        Invoke("ResetFallingThroughPlatform", 0.25f);
                         continue;
                     }
                 }
